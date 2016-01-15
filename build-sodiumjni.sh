@@ -37,14 +37,24 @@ SODIUMJNI_SRC_ROOT="${SODIUMJNI_HOME}/app/src"
 LIBSODIUM_JNI_HOME="${SODIUMJNI_HOME}/jni"
 
 ##
+# Step 0
+#
+echo 'Step 0: installing required libs'
+brew install swig automake autoconf libtool maven pcre
+# TODO: apt-get instead for debian/ubuntu
+
+
+##
 #   Step 1
 #
+echo 'Step 1: Building libsodium'
 cd $LIBSODIUM_JNI_HOME
 ./build-libsodium.sh
 
 ##
 #   Step 2 
 #
+echo 'Step 2: Swig-ing libsodium'
 cd $LIBSODIUM_JNI_HOME
 
 SODIUMJNI_PACKAGE=com.jackwink.libsodium.jni
@@ -55,32 +65,41 @@ mkdir -p $SODIUMJNI_JAVA_PACKAGE_ROOT
 export C_INCLUDE_PATH="${JAVA_HOME}/include:${JAVA_HOME}/include/linux:/System/Library/Frameworks/JavaVM.framework/Headers"
 
 rm -f *.c
-swig -java -package $SODIUMJNI_PACKAGE -outdir $SODIUMJNI_JAVA_PACKAGE_ROOT sodium.i
+/usr/local/lib/bin/swig -java -package $SODIUMJNI_PACKAGE -outdir $SODIUMJNI_JAVA_PACKAGE_ROOT sodium.i
 
 ##
 #   Step 3
 #
-
+echo 'Step 3: Creating shared library'
 cd $LIBSODIUM_JNI_HOME
 
 # For linux, we want to create a shared library for running tests on the local jvm
 jnilib=libsodiumjni.so
-destlib=/usr/lib
+LIBRARY_INCLUDE_PATH=/usr/lib
+destlib=$LIBRARY_INCLUDE_PATH
+JAVA_LIB_INCLUDE_PATH=$JAVA_HOME/include/linux
 if uname -a | grep -q -i darwin; then
     # For OSX java requires some different lib locations/names 
     jnilib=libsodiumjni.jnilib
-    destlib=/usr/lib/java
+	LIBRARY_INCLUDE_PATH=/usr/local/lib
+    destlib=$LIBRARY_INCLUDE_PATH/java
+	JAVA_LIB_INCLUDE_PATH=$JAVA_HOME/include/darwin
 fi
-
+echo " jnilib: $jnilib"
+echo " destlib: $destlib"
 # Local JVM build (OSX/Linux)
-gcc -I${JAVA_HOME}/include -I${JAVA_HOME}/include/linux sodium_wrap.c -shared -fPIC -L/usr/lib -lsodium -o $jnilib
+echo 'Local JVM build'
+gcc -I${JAVA_HOME}/include -I${JAVA_LIB_INCLUDE_PATH} -I${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/include sodium_wrap.c -shared -fPIC -L${LIBRARY_INCLUDE_PATH} -lsodium -o $jnilib
 sudo rm -f "$destlib/$jnilib" 
 sudo mv $jnilib $destlib
 
 # Android build
+echo 'Android build'
+PATH=$PATH:$ANDROID_NDK_HOME
 ndk-build
 
 # do some cleanup
+echo 'Cleaning up'
 rm -rf $SODIUMJNI_HOME/obj
 rm -rf $SODIUMJNI_SRC_ROOT/main/lib
 mv $SODIUMJNI_HOME/libs $SODIUMJNI_SRC_ROOT/main/lib
@@ -88,7 +107,7 @@ mv $SODIUMJNI_HOME/libs $SODIUMJNI_SRC_ROOT/main/lib
 ##
 #   Step 4
 #
-
+echo 'Step 4: gradle build'
 cd $SODIUMJNI_HOME
 ./gradlew build
 

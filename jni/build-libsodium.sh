@@ -2,7 +2,8 @@
 
 SODIUM_HOME=$(pwd)/libsodium
 
-cd $SODIUM_HOME && git pull 
+# manage branch with git submodule, don't pull here
+cd $SODIUM_HOME
 
 # This can be removed once we pull from a release
 if [ ! -e $SODIUM_HOME/configure ]; then
