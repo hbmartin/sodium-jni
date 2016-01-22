@@ -59,37 +59,31 @@ cd $LIBSODIUM_JNI_HOME
 
 SODIUMJNI_PACKAGE=com.jackwink.libsodium.jni
 SODIUMJNI_JAVA_PACKAGE_ROOT=$SODIUMJNI_SRC_ROOT/main/java/com/jackwink/libsodium/jni
+JAVA_LIB_INCLUDE_PATH=$JAVA_HOME/include/darwin
 
 rm -rf $SODIUMJNI_JAVA_PACKAGE_ROOT
 mkdir -p $SODIUMJNI_JAVA_PACKAGE_ROOT
-export C_INCLUDE_PATH="${JAVA_HOME}/include:${JAVA_HOME}/include/linux:/System/Library/Frameworks/JavaVM.framework/Headers"
+export C_INCLUDE_PATH="${JAVA_HOME}/include:${JAVA_LIB_INCLUDE_PATH}:/System/Library/Frameworks/JavaVM.framework/Headers"
 
 rm -f *.c
-/usr/local/lib/bin/swig -java -package $SODIUMJNI_PACKAGE -outdir $SODIUMJNI_JAVA_PACKAGE_ROOT sodium.i
+/usr/local/bin/swig -java -package $SODIUMJNI_PACKAGE -outdir $SODIUMJNI_JAVA_PACKAGE_ROOT sodium.i
 
 ##
 #   Step 3
 #
 echo 'Step 3: Creating shared library'
 cd $LIBSODIUM_JNI_HOME
-
+make clean && ./configure && make && sudo make install
 # For linux, we want to create a shared library for running tests on the local jvm
-jnilib=libsodiumjni.so
-LIBRARY_INCLUDE_PATH=/usr/lib
-destlib=$LIBRARY_INCLUDE_PATH
-JAVA_LIB_INCLUDE_PATH=$JAVA_HOME/include/linux
-if uname -a | grep -q -i darwin; then
-    # For OSX java requires some different lib locations/names 
-    jnilib=libsodiumjni.jnilib
-	LIBRARY_INCLUDE_PATH=/usr/local/lib
-    destlib=$LIBRARY_INCLUDE_PATH/java
-	JAVA_LIB_INCLUDE_PATH=$JAVA_HOME/include/darwin
-fi
+LIBRARY_INCLUDE_PATH=/usr/local/lib
+destlib=$LIBRARY_INCLUDE_PATH/java
+mkdir -p $destlib
+jnilib=libsodiumjni.jnilib
 echo " jnilib: $jnilib"
 echo " destlib: $destlib"
 # Local JVM build (OSX/Linux)
 echo 'Local JVM build'
-gcc -I${JAVA_HOME}/include -I${JAVA_LIB_INCLUDE_PATH} -I${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/include sodium_wrap.c -shared -fPIC -L${LIBRARY_INCLUDE_PATH} -lsodium -o $jnilib
+gcc -I${JAVA_HOME}/include -I${JAVA_LIB_INCLUDE_PATH} -I${JAVA_HOME}/include -I${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/include sodium_wrap.c -shared -fPIC -L${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/.libs -lsodium -o $jnilib
 sudo rm -f "$destlib/$jnilib" 
 sudo mv $jnilib $destlib
 
@@ -111,12 +105,13 @@ echo 'Step 4: gradle build'
 cd $SODIUMJNI_HOME
 ./gradlew build
 
-SKIP_TEST="skip-test"
-if [ "$1" != "$SKIP_TEST" ]; then
+if [ $(adb devices -l | wc -l) -gt 2 ]; then
 ./gradlew connectedCheck 
 fi
 
 rm -rf $SODIUMJNI_HOME/build 
 rm -rf $SODIUMJNI_HOME/sodiumjni-androidlib
-mv $SODIUMJNI_HOME/app/build/outputs/aar $SODIUMJNI_HOME/sodiumjni-androidlib
+rm $SODIUMJNI_HOME/sodiumjni-androidlib/*.aar
+mv $SODIUMJNI_HOME/app/build/outputs/aar/*.aar $SODIUMJNI_HOME/sodiumjni-androidlib
 rm -rf $SODIUMJNI_HOME/app/build
+open $SODIUMJNI_HOME/sodiumjni-androidlib
