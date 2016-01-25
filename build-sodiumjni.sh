@@ -12,6 +12,12 @@
 #
 #   4. Run gradle build script
 
+echo "Please make sure you have installed and setup Xcode"
+xcode-select --install
+
+echo "Please make sure you have already installed homebrew"
+# ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+
 # Fail if anything returns non-zero
 set -e
 
@@ -23,9 +29,27 @@ require_env_var() {
     fi
 }
 
-require_env_var "$JAVA_HOME" "JAVA_HOME"
-require_env_var "$ANDROID_HOME" "ANDROID_HOME"
-require_env_var "$ANDROID_NDK_HOME" "ANDROID_NDK_HOME"
+
+if [ -z "$JAVA_HOME" ]
+then
+	JAVA_HOME=$(/usr/libexec/java_home)
+	echo "Setting JAVA_HOME to $JAVA_HOME"
+fi
+
+if [ -z "$ANDROID_HOME" ]
+then
+	ANDROID_HOME=$HOME/Library/Android/sdk
+	echo "Setting ANDROID_HOME to $ANDROID_HOME"
+fi
+
+if [ -z "$ANDROID_NDK_HOME" ]
+then
+	echo "Please manually set ANDROID_NDK_HOME to wherever you extracted NDK download"
+	echo "You can download the NDK at:"
+	echo "http://developer.android.com/ndk/downloads/index.html#download"
+	exit
+fi
+
 
 # Root location of the sodium-jni project
 SODIUMJNI_HOME=$(pwd)
@@ -48,6 +72,20 @@ brew install swig automake autoconf libtool maven pcre
 #   Step 1
 #
 echo 'Step 1: Building libsodium'
+cd $SODIUMJNI_HOME
+if [ -f $LIBSODIUM_JNI_HOME/libsodium/Makefile.am ]; then
+	echo "libsodium appears to have been correctly checked out"
+elif [ -d .git ]; then
+	echo "cloning libsodium submodule"
+	git submodule update --init --recursive
+else
+	echo "cloning libsodium at commit 392f094a909cd4f01c11f36b61e431947b55fb66"
+	cd $LIBSODIUM_JNI_HOME
+	git clone https://github.com/jedisct1/libsodium.git
+	cd libsodium
+	git checkout 392f094a909cd4f01c11f36b61e431947b55fb66
+fi
+
 cd $LIBSODIUM_JNI_HOME
 ./build-libsodium.sh
 
@@ -83,7 +121,7 @@ echo " jnilib: $jnilib"
 echo " destlib: $destlib"
 # Local JVM build (OSX/Linux)
 echo 'Local JVM build'
-gcc -I${JAVA_HOME}/include -I${JAVA_LIB_INCLUDE_PATH} -I${JAVA_HOME}/include -I${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/include sodium_wrap.c -shared -fPIC -L${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/.libs -lsodium -o $jnilib
+gcc -I${JAVA_HOME}/include -I${JAVA_LIB_INCLUDE_PATH} -I${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/include sodium_wrap.c -shared -fPIC -L${LIBSODIUM_JNI_HOME}/libsodium/src/libsodium/.libs -lsodium -o $jnilib
 sudo rm -f "$destlib/$jnilib" 
 sudo mv $jnilib $destlib
 
